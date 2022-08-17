@@ -8,14 +8,16 @@ type Actions<TState> = {
 type Subscriber<TState> = (nextState: TState, prevState: TState) => void;
 type Unsubscribe = () => void;
 
+type StateUpdater<TState> = TState | ((currentState: TState) => TState);
+
 type Store<TState, TActions extends Actions<TState>> = {
   getState: () => TState;
   dispatch: <TDispatchKey extends keyof TActions>(
     action: TDispatchKey,
     payload: Parameters<TActions[TDispatchKey]>[0]
   ) => ReturnType<TActions[TDispatchKey]> extends Promise<any>
-    ? Promise<TState>
-    : TState;
+    ? Promise<StateUpdater<TState>>
+    : StateUpdater<TState>;
   subscribe: (subscriber: Subscriber<TState>) => Unsubscribe;
 };
 
@@ -26,9 +28,11 @@ export function createStore<TState, TActions extends Actions<TState>>(
   let state = defaultState;
 
   const subscribers: Subscriber<TState>[] = [];
-  const handleNextState = (nextState: TState) => {
-    subscribers.forEach((subscriber) => subscriber(nextState, state));
-    state = nextState;
+  const handleNextState = (update: StateUpdater<TState>) => {
+    const previousState = state;
+    const nextState = (state =
+      typeof update === "function" ? (update as any)(previousState) : update);
+    subscribers.forEach((subscriber) => subscriber(nextState, previousState));
     return state;
   };
 
